@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -e
+set -x
+
+for a in passwd group shadow ; do
+	cat /tmp/identity/$a >> /etc/$a
+done
+
+mv /usr/sbin/policy-rc.d.disabled /usr/sbin/policy-rc.d
+apt-get update
+db_util=$(dpkg-query --showformat='${Pre-Depends}' --show libpam-modules | sed -e 's/,\s\+/\n/g' | grep libdb | xargs dpkg-query --showformat='${Source}' --show | xargs apt-cache show | grep 'Package:.*util' | grep -vi sql | cut -d ' ' -f 2)
+DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install \
+       	vsftpd \
+	$db_util
+
+ln -s $(dpkg -L $db_util | grep '/bin.*_load$') /usr/local/bin/db_load
+
+apt-get -y -u dist-upgrade
+apt-get clean
+rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+/usr/local/bin/docker-wipelogs
+
+mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.disabled

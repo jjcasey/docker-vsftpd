@@ -1,0 +1,1 @@
+# VSFTPD for Docker

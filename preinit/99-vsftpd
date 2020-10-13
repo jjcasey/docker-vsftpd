@@ -1,0 +1,35 @@
+#! /bin/bash
+
+set -e
+
+if [ -e "$VSFTPD_CONF" ] ; then
+	cp "$VSFTPD_CONF" /etc/vsftpd.conf
+fi
+
+if [ -e "$VSFTPD_PAMD" ] ; then
+	pam_service_name=$(grep '^\s*pam_service_name\s*=' /etc/vsftpd.conf | cut -d '=' -f 2)
+	if [ -z "$pam_service_name" ] ; then
+		pam_service_name=vsftpd
+	fi
+	cp "$VSFTPD_PAMD" /etc/pam.d/"$pam_service_name"
+fi
+
+if [ -n "$VSFTPD_VIRTUAL_USERS" ] && [ -f "$VSFTPD_VIRTUAL_USERS" ] ; then
+	user_sub_token=$(grep '^\s*user_sub_token\s*=' /etc/vsftpd.conf | cut -d '=' -f 2 | sed -e 's/\$/\\$/g')
+	if [ -n "$user_sub_token" ] ; then
+		local_root=$(grep '^\s*local_root\s*=' /etc/vsftpd.conf | cut -d '=' -f 2 | sed -e "s/$user_sub_token/\$user/g")
+		if [ -n "$local_root" ] ; then
+			cat "$VSFTPD_VIRTUAL_USERS" | while read user ; read pass ; do
+				[ -z "$user" ] && continue
+				user_root=$(eval echo "$local_root")
+				[ -d "$user_root" ] && continue
+				mkdir "$user_root"
+ 				chown ftp:ftp "$user_root"
+ 				mkdir "$user_root/files"
+ 				chown ftp:ftp "$user_root/files"
+ 				chmod a-w "$user_root"
+			done
+			db_load -T -t hash -f "$VSFTPD_VIRTUAL_USERS" "${VSFTPD_VIRTUAL_USERS%.txt}.db"
+		fi
+	fi
+fi
